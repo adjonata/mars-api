@@ -7,7 +7,7 @@
     "test": "test",
     "dev": "nodemon",
     "start": "pm2 start ./dist/server.js --name=mars-rover-app",
-    "build": "rimraf ./dist && ttsc && babel dist -d dist"
+    "build": "ttsc && babel dist -d dist"
   },
   "author": "Alex Djonata <alex.code.js@gmail.com>",
   "license": "MIT",
