@@ -4,7 +4,7 @@ dotenv.config({ path: __dirname + "/../.env" });
 import mongoose from "mongoose";
 import app from "./app";
 
-const port = 8080;
+const port = process.env.PORT || 3000;;
 
 mongoose.set("useCreateIndex", true);
 
