@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyJWT } from "@/middlewares/auth";
 
 import PhotosController from "@/controllers/photos/photos.controller";
-import MarsIntegration from "@/fixtures/mars.controller";
+import MarsIntegration from "@/controllers/manifests/manifests.controller";
 
 import validation from "@/validation/photos.valid";
 

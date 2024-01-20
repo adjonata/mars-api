@@ -5,7 +5,7 @@ export default interface Photo {
   sol: number;
   camera: CameraDetails;
   img_src: string;
-  earth_date: string;
+  earth_date: Date;
   rover: Rover;
 }
 

@@ -1,6 +1,6 @@
 export default interface PhotoManifest {
   sol: number;
-  earth_date: string;
+  earth_date: Date;
   total_photos: number;
   cameras: string[];
 }

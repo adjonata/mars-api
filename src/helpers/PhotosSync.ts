@@ -42,7 +42,7 @@ export default class PhotosSync implements IPhotosSync {
 
     if (!validPeriod) {
       return response.status(400).json({
-        message: `The maximum period is ${this.maxPeriod} days.`
+        message: `The maximum period is ${this.maxPeriod} days.`,
       });
     }
 
@@ -53,7 +53,7 @@ export default class PhotosSync implements IPhotosSync {
 
     if (manifestsFromPeriod.length <= 0) {
       return response.status(400).json({
-        message: "There are no manifests in that period."
+        message: "There are no manifests in that period.",
       });
     }
 
@@ -63,7 +63,7 @@ export default class PhotosSync implements IPhotosSync {
 
     if (solsToBeSynchronized.length === 0) {
       return response.status(201).json({
-        message: "All photos from this period have already been synced."
+        message: "All photos from this period have already been synced.",
       });
     }
 
@@ -80,7 +80,7 @@ export default class PhotosSync implements IPhotosSync {
       totalPhotosAdded: this.totalPhotosAdded,
       totalSolsAdded: solsToBeSynchronized.length,
       syncSeconds: this.timer?.getSeconds() || 1,
-      syncMilliSeconds: this.timer?.getMilliSeconds() || 1
+      syncMilliSeconds: this.timer?.getMilliSeconds() || 1,
     });
   }
 
@@ -92,25 +92,26 @@ export default class PhotosSync implements IPhotosSync {
 
     return {
       isoMinDate: parseISO(this.minDate),
-      isoMaxDate: parseISO(this.maxDate)
+      isoMaxDate: parseISO(this.maxDate),
     };
   }
 
   validatePeriodRange() {
     const [isoMinDate, isoMaxDate] = [
       parseISO(this.minDate),
-      parseISO(this.maxDate)
+      parseISO(this.maxDate),
     ];
 
     return differenceInDays(isoMaxDate, isoMinDate) <= this.maxPeriod;
   }
 
   async findManifestsByPeriod(isoMinDate: Date, isoMaxDate: Date) {
-    return await ManifestsModel.find()
-      .where("earth_date")
-      .gt(subDays(isoMinDate, 1))
-      .lt(addDays(isoMaxDate, 1))
-      .exec();
+    return await ManifestsModel.find({
+      earth_date: {
+        $gte: subDays(isoMinDate, 1),
+        $lt: addDays(isoMinDate, 1),
+      },
+    }).exec();
   }
 
   async comparePhotosOfTheBases(manifests: IManifest[]) {
@@ -136,12 +137,12 @@ export default class PhotosSync implements IPhotosSync {
     const photosNotFound: Photo[] = [];
 
     for (const sol of sols) {
-      await PhotosService.queryBySol(sol).then(async photos => {
+      await PhotosService.queryBySol(sol).then(async (photos) => {
         let totalPhotosInSol = 0;
 
         for (const photo of photos) {
           const foundInDatabase = await PhotosModel.findOne({
-            id_base: photo.id
+            id_base: photo.id,
           });
           if (!foundInDatabase) {
             totalPhotosInSol++;
@@ -186,7 +187,7 @@ export default class PhotosSync implements IPhotosSync {
       camera: camera.name,
       earth_date,
       sol,
-      src: splittedSrc
+      src: splittedSrc,
     } as IPhotos;
   }
 }
