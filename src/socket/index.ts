@@ -14,7 +14,11 @@ type Message = {
 };
 
 export const openSocket = (server: HttpServer) => {
-  const io = new Server(server);
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+    },
+  });
 
   io.use(async (socket, next) => {
     const token = socket.handshake.headers?.authorization;
@@ -40,11 +44,9 @@ export const openSocket = (server: HttpServer) => {
               syncPeriod: { minDate, maxDate },
               onError(data) {
                 socket.emit("error", data);
-                socket.disconnect();
               },
               onFinish(data) {
                 socket.emit("success", data);
-                socket.disconnect();
               },
               onLog(data) {
                 socket.emit("status", data);
