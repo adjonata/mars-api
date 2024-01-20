@@ -1,11 +1,11 @@
 import { Router } from "express";
 
-import { verifyJWT } from "@/middlewares/auth";
+import { verifyRequestJWT } from "@/middlewares/auth";
 
 const ManifestsRoutes = Router();
 
-import MarsIntegration from "@/controllers/manifests/manifests.controller";
+import SyncController from "@/controllers/sync/sync.controller";
 
-ManifestsRoutes.post("/sync", verifyJWT, MarsIntegration.sync_manifests);
+ManifestsRoutes.post("/sync", verifyRequestJWT, SyncController.sync_manifests);
 
 export default ManifestsRoutes;

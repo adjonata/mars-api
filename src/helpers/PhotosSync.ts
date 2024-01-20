@@ -6,54 +6,74 @@ import PhotosService from "@/services/photos.service";
 
 import PhotosManifest from "@/types/PhotosManifest";
 import Photo from "@/types/Photo";
-import { differenceInDays, parseISO, subDays, addDays } from "date-fns";
+import {
+  differenceInDays,
+  parseISO,
+  subDays,
+  addDays,
+  formatISO,
+} from "date-fns";
 
-interface PhotosRequest extends Request {
-  body: {
-    minDate: string;
-    maxDate: string;
-  };
-}
-
-interface IPhotosSync {
+interface PhotosSyncProps {
   totalPhotosAdded: number;
   timer: ITimer | undefined;
-  minDate: string;
-  maxDate: string;
+  minDate: Date;
+  maxDate: Date;
   maxPeriod: number;
 }
 
-export default class PhotosSync implements IPhotosSync {
+type SyncPeriod = {
+  minDate: Date;
+  maxDate: Date;
+};
+type LogFunc = (message: string) => Promise<void> | void;
+interface PhotosSyncConstructor {
+  syncPeriod: SyncPeriod;
+  onError: (data: { cause: string }) => Promise<void> | void;
+  onFinish: (data: {
+    totalDays: number;
+    totalPhotos: number;
+    totalTime?: number;
+    message?: string;
+  }) => Promise<void> | void;
+  onLog: LogFunc;
+}
+
+export default class PhotosSync implements PhotosSyncProps {
   totalPhotosAdded = 0;
   timer: ITimer | undefined = undefined;
-  minDate = "";
-  maxDate = "";
-  maxPeriod = 200;
+  minDate = new Date();
+  maxDate = new Date();
+  maxPeriod = 400;
 
-  constructor(request: PhotosRequest, response: Response) {
+  constructor(props: PhotosSyncConstructor) {
     this.timer = new Timer();
-    this.syncPhotosByPeriod(request, response);
+    this.syncPhotosByPeriod(props);
   }
 
-  async syncPhotosByPeriod(request: PhotosRequest, response: Response) {
-    const { isoMinDate, isoMaxDate } = this.extractDateFromRequest(request);
+  async syncPhotosByPeriod(props: PhotosSyncConstructor) {
+    const { syncPeriod } = props;
+    this.minDate = syncPeriod.minDate;
+    this.maxDate = syncPeriod.maxDate;
 
     const validPeriod = this.validatePeriodRange();
 
     if (!validPeriod) {
-      return response.status(400).json({
-        message: `The maximum period is ${this.maxPeriod} days.`,
+      return props.onError({
+        cause: `The maximum period is ${this.maxPeriod} days.`,
       });
     }
-
-    const manifestsFromPeriod = await this.findManifestsByPeriod(
-      isoMinDate,
-      isoMaxDate
+    props.onLog(
+      `Synchronization is started to period ${formatISO(
+        this.minDate
+      )} at ${formatISO(this.maxDate)}!`
     );
 
+    const manifestsFromPeriod = await this.findManifestsOfPeriod();
+
     if (manifestsFromPeriod.length <= 0) {
-      return response.status(400).json({
-        message: "There are no manifests in that period.",
+      return props.onError({
+        cause: "There are no manifests in that period.",
       });
     }
 
@@ -62,54 +82,46 @@ export default class PhotosSync implements IPhotosSync {
     );
 
     if (solsToBeSynchronized.length === 0) {
-      return response.status(201).json({
+      return props.onFinish({
+        totalDays: 0,
+        totalPhotos: 0,
+        totalTime: this.timer?.getSeconds(),
         message: "All photos from this period have already been synced.",
       });
     }
 
+    props.onLog(`${solsToBeSynchronized.length} days need to be synchronized`);
+
     const photosNotFoundInLocal = await this.findNotFoundPhotosBySun(
-      solsToBeSynchronized
+      solsToBeSynchronized,
+      props.onLog
+    );
+
+    props.onLog(
+      `${photosNotFoundInLocal.length} photos need to be synchronized`
     );
 
     await this.savePhotos(photosNotFoundInLocal).then(() => {
       this.timer?.break();
     });
 
-    return response.status(200).json({
+    return props.onFinish({
       message: "Success in synchronization!",
-      totalPhotosAdded: this.totalPhotosAdded,
-      totalSolsAdded: solsToBeSynchronized.length,
-      syncSeconds: this.timer?.getSeconds() || 1,
-      syncMilliSeconds: this.timer?.getMilliSeconds() || 1,
+      totalPhotos: this.totalPhotosAdded,
+      totalDays: solsToBeSynchronized.length,
+      totalTime: this.timer?.getSeconds(),
     });
   }
 
-  extractDateFromRequest(request: PhotosRequest) {
-    const { minDate, maxDate } = request.body;
-
-    this.minDate = minDate;
-    this.maxDate = maxDate;
-
-    return {
-      isoMinDate: parseISO(this.minDate),
-      isoMaxDate: parseISO(this.maxDate),
-    };
-  }
-
   validatePeriodRange() {
-    const [isoMinDate, isoMaxDate] = [
-      parseISO(this.minDate),
-      parseISO(this.maxDate),
-    ];
-
-    return differenceInDays(isoMaxDate, isoMinDate) <= this.maxPeriod;
+    return differenceInDays(this.maxDate, this.minDate) <= this.maxPeriod;
   }
 
-  async findManifestsByPeriod(isoMinDate: Date, isoMaxDate: Date) {
+  async findManifestsOfPeriod() {
     return await ManifestsModel.find({
       earth_date: {
-        $gte: subDays(isoMinDate, 1),
-        $lt: addDays(isoMinDate, 1),
+        $gte: subDays(this.minDate, 1),
+        $lt: addDays(this.maxDate, 1),
       },
     }).exec();
   }
@@ -133,10 +145,11 @@ export default class PhotosSync implements IPhotosSync {
     return solsToBeSynchronized;
   }
 
-  async findNotFoundPhotosBySun(sols: number[]) {
+  async findNotFoundPhotosBySun(sols: number[], log: LogFunc) {
     const photosNotFound: Photo[] = [];
 
-    for (const sol of sols) {
+    for (const solIndex in sols) {
+      const sol = sols[solIndex];
       await PhotosService.queryBySol(sol).then(async (photos) => {
         let totalPhotosInSol = 0;
 
@@ -149,32 +162,16 @@ export default class PhotosSync implements IPhotosSync {
             photosNotFound.push(photo);
           }
         }
-
-        console.log(
-          "Sol",
-          sol + "/" + sols.length,
-          "-",
-          totalPhotosInSol,
-          `photos to be synchronized`
-        );
+        if (totalPhotosInSol > 0) {
+          log(
+            `Are ${totalPhotosInSol} photos of sol ${sol} to be sync (Sun ${
+              Number(solIndex) + 1
+            }/${sols.length})`
+          );
+        }
       });
     }
-
-    console.log("================");
-    console.log(photosNotFound.length, "PHOTOS ARE GOING TO BE ADDED");
-
     return photosNotFound;
-  }
-
-  async savePhotos(photos: Photo[]) {
-    const photosToSave: IPhotos[] = [];
-    for (const photo of photos) {
-      photosToSave.push(this.makePhotoToLocalDatabase(photo));
-    }
-
-    await PhotosModel.insertMany(photosToSave).then(() => {
-      this.totalPhotosAdded = photosToSave.length;
-    });
   }
 
   makePhotoToLocalDatabase(photo: Photo) {
@@ -189,5 +186,16 @@ export default class PhotosSync implements IPhotosSync {
       sol,
       src: splittedSrc,
     } as IPhotos;
+  }
+
+  async savePhotos(photos: Photo[]) {
+    const photosToSave: IPhotos[] = [];
+    for (const photo of photos) {
+      photosToSave.push(this.makePhotoToLocalDatabase(photo));
+    }
+
+    await PhotosModel.insertMany(photosToSave).then(() => {
+      this.totalPhotosAdded = photosToSave.length;
+    });
   }
 }

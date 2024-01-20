@@ -1,5 +1,9 @@
 import { Server } from "socket.io";
 import type { Server as HttpServer } from "http";
+import syncController from "@/controllers/sync/sync.controller";
+import PhotosSync from "@/helpers/PhotosSync";
+import { parseISO } from "date-fns";
+import { verifyJWT, verifyRequestJWT } from "@/middlewares/auth";
 
 type Message = {
   command: "sync-images";
@@ -12,7 +16,15 @@ type Message = {
 export const openSocket = (server: HttpServer) => {
   const io = new Server(server);
 
-  io.on("connection", (socket) => {
+  io.use(async (socket, next) => {
+    const token = socket.handshake.headers?.authorization;
+    await verifyJWT(token)
+      .then(() => next())
+      .catch(() => {
+        next(new Error());
+        return;
+      });
+  }).on("connection", async (socket) => {
     console.log("SOCKET - New user connected");
     socket.on("message", (message: string) => {
       try {
@@ -20,7 +32,25 @@ export const openSocket = (server: HttpServer) => {
 
         switch (messageJson.command) {
           case "sync-images":
-            console.log(messageJson.data);
+            const [minDate, maxDate] = [
+              parseISO(messageJson.data.minDate),
+              parseISO(messageJson.data.maxDate),
+            ];
+            new PhotosSync({
+              syncPeriod: { minDate, maxDate },
+              onError(data) {
+                socket.emit("error", data);
+                socket.disconnect();
+              },
+              onFinish(data) {
+                socket.emit("success", data);
+                socket.disconnect();
+              },
+              onLog(data) {
+                socket.emit("status", data);
+              },
+            });
+            break;
         }
       } catch (error) {
         console.error("SOCKET - Error in decode message");
