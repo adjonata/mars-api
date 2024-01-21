@@ -5,25 +5,23 @@ export interface IAllowed extends Request {
   user?: Object;
 }
 
-export function verifyRequestJWT(
+export async function verifyJWTRequest(
   req: IAllowed,
   res: Response,
   next: NextFunction
 ) {
   const token = req.headers["authorization"];
 
-  if (!token) return res.status(401).json({ message: "No token provided." });
-
-  jwt.verify(String(token), String(process.env.SECRET), (err, decoded) => {
-    if (err) {
+  return await verifyJWT(token)
+    .then((user) => {
+      if (user) {
+        req.user = user;
+      }
+      next();
+    })
+    .catch(() => {
       return res.status(401).json({ message: "Failed to authenticate token." });
-    }
-
-    if (decoded) {
-      req.user = decoded;
-    }
-    next();
-  });
+    });
 }
 
 export function verifyJWT(token?: string) {
