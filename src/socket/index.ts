@@ -1,9 +1,7 @@
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 import type { Server as HttpServer } from "http";
-import PhotosSync from "@/helpers/PhotosSync";
-import { parseISO } from "date-fns";
 import { verifyJWT } from "@/middlewares/auth";
-import { triggerCommand } from "./commands";
+import { SyncImagesData, commands } from "./commands";
 
 export const openSocket = (server: HttpServer) => {
   const io = new Server(server, {
@@ -20,11 +18,17 @@ export const openSocket = (server: HttpServer) => {
         next(new Error());
         return;
       });
-  }).on("connection", (socket) => {
+  }).on("connection", (socket: Socket) => {
     console.log(`Socket - New user connected`);
 
-    socket.on("message", (message: string) => {
-      triggerCommand(socket, message);
+    socket.on("sync", (message: string) => {
+      try {
+        commands.syncImages(socket, JSON.parse(message) as SyncImagesData);
+      } catch (error) {
+        console.error("Error in photos sync", error);
+        socket.emit("error", { cause: "Error in photos sync" });
+        socket.disconnect();
+      }
     });
   });
 };

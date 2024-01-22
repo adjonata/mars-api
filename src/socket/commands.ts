@@ -2,33 +2,18 @@ import PhotosSync from "@/helpers/PhotosSync";
 import { parseISO } from "date-fns";
 import { Socket } from "socket.io";
 
-type Message = {
-  command: string;
-  data: object;
+export type SyncImagesData = {
+  minDate: string;
+  maxDate: string;
 };
 
-export const triggerCommand = (socket: Socket, message: string) => {
-  try {
-    const { command, data } = JSON.parse(message) as Message;
-
-    switch (command) {
-      case "sync-images":
-        return commands.syncImages(socket, data);
-    }
-  } catch (error) {
-    console.error("Socket - Error in decode message");
-    socket.emit("error", "Invalid command");
-    socket.disconnect();
-  }
-};
-
-const commands = {
-  syncImages: (socket: Socket, data: object) => {
+export const commands = {
+  syncImages: (socket: Socket, data: SyncImagesData) => {
     if (
+      typeof data !== "object" ||
       "minDate" in data === false ||
       typeof data.minDate !== "string" ||
-      "maxDate" in data === false ||
-      typeof data.maxDate !== "string"
+      "maxDate" in data === false
     ) {
       socket.emit("error", { cause: "Invalid dates" });
       socket.disconnect();
