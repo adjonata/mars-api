@@ -1,5 +1,4 @@
 import ManifestsSync from "@/helpers/ManifestsSync";
-import PhotosSync from "@/helpers/PhotosSync";
 import { Request, Response } from "express";
 
 export default {

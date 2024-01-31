@@ -1,18 +1,26 @@
-import Photos from "@/models/photos.model";
+import Photos, { IPhotosDocument } from "@/models/photos.model";
 import { Request, Response } from "express";
 import { parseISO, differenceInMonths, differenceInDays } from "date-fns";
+import { Pagination } from "@/types/Pagination";
 
-interface IGetByPeriodRequest extends Request {
-  body: {
-    minDate?: string;
-    maxDate?: string;
-    cameras?: string[];
-  };
+interface GetByPeriodBody
+  extends Pagination<
+    IPhotosDocument[],
+    {
+      minDate?: string;
+      maxDate?: string;
+      cameras?: string[];
+    }
+  > {}
+
+interface GetByPeriodRequest extends Request {
+  body: GetByPeriodBody;
 }
 
 export default {
-  async getByPeriod(req: IGetByPeriodRequest, res: Response) {
-    let { minDate, maxDate, cameras } = req.body;
+  async getByPeriod(req: GetByPeriodRequest, res: Response) {
+    let { minDate, maxDate, cameras } = req.body?.filters || {};
+    const { itemsPerPage = 10, page = 1 } = req.body;
 
     if (!minDate || !maxDate) {
       return res.status(400).json({ message: "Invalid period." });
@@ -22,13 +30,13 @@ export default {
 
     if (differenceInMonths(maxDateISO, minDateISO) > 2) {
       return res.status(401).json({
-        message: "The maximum period is 2 months."
+        message: "The maximum period is 2 months.",
       });
     }
 
     if (differenceInDays(maxDateISO, minDateISO) < 1) {
       return res.status(401).json({
-        message: "The minimum period is one day."
+        message: "The minimum period is one day.",
       });
     }
 
@@ -38,26 +46,36 @@ export default {
     } = {
       earth_date: {
         $gte: minDateISO,
-        $lte: maxDateISO
-      }
+        $lte: maxDateISO,
+      },
     };
 
     if (cameras && cameras.length > 0) {
       query["camera"] = {
-        $in: cameras
+        $in: cameras,
       };
     }
 
-    const photos = await Photos.find(query).then(response => {
-      return response.map(photo => {
-        photo.src = "https://mars.nasa.gov/" + photo.src;
-        return photo;
-      });
-    });
+    const totalItems = await Photos.find(query).countDocuments();
 
-    return res
-      .set("Total-Photos", String(photos.length))
-      .status(200)
-      .json(photos);
-  }
+    const photos = await Photos.find(query)
+      .skip(page * itemsPerPage)
+      .limit(itemsPerPage)
+      .then((response) => {
+        return response.map((photo) => {
+          photo.src = "https://mars.nasa.gov/" + photo.src;
+          return photo;
+        });
+      });
+
+    return res.status(200).json({
+      page,
+      totalPages: Math.round(totalItems / itemsPerPage),
+      totalItems,
+      itemsPerPage,
+      filters: req.body.filters,
+      itemsCount: photos.length,
+      items: photos,
+    } as GetByPeriodBody);
+  },
 };

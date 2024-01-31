@@ -34,6 +34,7 @@ export const commands = {
       syncPeriod: { minDate, maxDate },
       onError(data) {
         socket.emit("error", data);
+        socket.disconnect();
       },
       onFinish(data) {
         socket.emit("success", data);

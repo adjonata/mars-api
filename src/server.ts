@@ -3,7 +3,6 @@ dotenv.config({ path: __dirname + "/../.env" });
 
 import mongoose from "mongoose";
 import app from "./app";
-import socket from "socket.io";
 import { openSocket } from "./socket";
 
 const port = process.env.PORT || 3001;

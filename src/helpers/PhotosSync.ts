@@ -47,8 +47,15 @@ export default class PhotosSync implements PhotosSyncProps {
   maxPeriod = 400;
 
   constructor(props: PhotosSyncConstructor) {
-    this.timer = new Timer();
-    this.syncPhotosByPeriod(props);
+    try {
+      this.timer = new Timer();
+
+      this.syncPhotosByPeriod(props);
+    } catch (error) {
+      props.onError({
+        cause: "Error in photos synchronization",
+      });
+    }
   }
 
   async syncPhotosByPeriod(props: PhotosSyncConstructor) {
